@@ -68,26 +68,73 @@ export default function ClientRadar() {
       setSavedCandidates(data || []);
     } catch (err) { setError('Failed to load saved clients'); }
   };
-
- const handleSearch = async () => {
+const handleSearch = async () => {
   setLoading(true); setError(null);
   try {
-    // Step 1: Use AI to extract keywords if there's a description
+    // Smart keyword extractor - runs in browser, no API needed
     let searchTerms = [];
     if (filters.keyword) {
-      try {
-        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 100,
-            messages: [{
-              role: "user",
-              content: `Extract 3 to 5 short job title keywords from this description. Return ONLY a JSON array of strings like ["RIA","CFP","wealth manager"]. No explanation. Description: ${filters.keyword}`
-            }]
-          })
-        });
+      const stopWords = new Set([
+        'a','an','the','and','or','but','in','on','at','to','for','of','with',
+        'by','from','is','are','was','were','be','been','being','have','has',
+        'had','do','does','did','will','would','could','should','may','might',
+        'i','my','me','we','our','you','your','they','their','it','its',
+        'this','that','these','those','who','what','which','how','when','where',
+        'am','please','send','list','focus','first','also','can','us','based',
+        'start','going','targeting','addressing','ideal','client','business',
+        'would','like','want','need','looking','small','large','size','mid',
+        'managing','running','feeling','preparing','operating','growing',
+        'if','possible','companies','company','practice','team','teams','firm',
+        'firms','under','between','service','back','office','load','squeeze',
+        'primary','target','multi','independent','certified','registered'
+      ]);
+
+      // Extract meaningful words
+      const words = filters.keyword
+        .replace(/[^a-zA-Z0-9\s\-]/g, ' ')
+        .split(/\s+/)
+        .map(w => w.trim().toLowerCase())
+        .filter(w => w.length > 2 && !stopWords.has(w));
+
+      // Score words by importance (longer = more specific = more useful)
+      const wordScores = {};
+      words.forEach(w => {
+        wordScores[w] = (wordScores[w] || 0) + w.length;
+      });
+
+      // Take top 5 unique keywords
+      searchTerms = Object.entries(wordScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([word]) => word);
+    }
+
+    // Build Supabase query
+    let query = supabase.from('candidates').select('*');
+    if (filters.location) query = query.ilike('location', `%${filters.location}%`);
+    if (filters.industry) query = query.eq('industry', filters.industry);
+
+    if (searchTerms.length > 0) {
+      const orConditions = searchTerms.flatMap(kw => [
+        `current_title.ilike.%${kw}%`,
+        `previous_title.ilike.%${kw}%`,
+        `current_company.ilike.%${kw}%`
+      ]).join(',');
+      query = query.or(orConditions);
+    }
+
+    if (filters.minMatchScore > 0) query = query.gte('match_score', filters.minMatchScore);
+
+    const { data, error } = await query.order('match_score', { ascending: false });
+    if (error) throw error;
+    setSearchResults(data || []);
+    setActiveTab('results');
+  } catch (err) {
+    console.error('Search error:', err);
+    setError('Search failed. Please try again.');
+  } finally { setLoading(false); }
+};
+
         const aiData = await aiResponse.json();
         const rawText = aiData.content[0].text.trim();
         searchTerms = JSON.parse(rawText);
