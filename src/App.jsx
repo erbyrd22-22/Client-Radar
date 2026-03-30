@@ -70,20 +70,49 @@ export default function ClientRadar() {
   };
 
   const handleSearch = async () => {
-    setLoading(true); setError(null);
-    try {
-      let query = supabase.from('candidates').select('*');
-      if (filters.location) query = query.ilike('location', `%${filters.location}%`);
-      if (filters.industry) query = query.eq('industry', filters.industry);
-      if (filters.keyword) query = query.or(`current_title.ilike.%${filters.keyword}%,previous_title.ilike.%${filters.keyword}%`);
-      if (filters.minMatchScore > 0) query = query.gte('match_score', filters.minMatchScore);
-      const { data, error } = await query.order('match_score', { ascending: false });
-      if (error) throw error;
-      setSearchResults(data || []);
-      setActiveTab('results');
-    } catch (err) { setError('Search failed. Please try again.'); }
-    finally { setLoading(false); }
-  };
+  setLoading(true); setError(null);
+  try {
+    let query = supabase.from('candidates').select('*');
+    if (filters.location) query = query.ilike('location', `%${filters.location}%`);
+    if (filters.industry) query = query.eq('industry', filters.industry);
+
+    if (filters.keyword) {
+      // Use AI to extract search terms from the description
+      const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 200,
+          messages: [{
+            role: "user",
+            content: `Extract the 3-5 most important job title or role keywords from this client description. Return ONLY a comma-separated list of short keywords, nothing else. Description: ${filters.keyword}`
+          }]
+        })
+      });
+      const aiData = await aiResponse.json();
+      const keywords = aiData.content[0].text.split(',').map(k => k.trim()).filter(Boolean);
+      
+      // Build OR query from AI-extracted keywords
+      const orConditions = keywords.flatMap(kw => [
+        `current_title.ilike.%${kw}%`,
+        `previous_title.ilike.%${kw}%`,
+        `current_company.ilike.%${kw}%`
+      ]).join(',');
+      
+      if (orConditions) query = query.or(orConditions);
+    }
+
+    if (filters.minMatchScore > 0) query = query.gte('match_score', filters.minMatchScore);
+    const { data, error } = await query.order('match_score', { ascending: false });
+    if (error) throw error;
+    setSearchResults(data || []);
+    setActiveTab('results');
+  } catch (err) {
+    console.error('Search error:', err);
+    setError('Search failed. Please try again.');
+  } finally { setLoading(false); }
+};
 
   const saveCandidate = async (candidate) => {
     try {
