@@ -198,4 +198,152 @@ export default function ClientRadar() {
       )}
 
       <nav className="max-w-6xl mx-auto mt-4 px-4">
-        <div className="flex gap-2 bg-white rounded-lg p-1 shado
+        <div className="flex gap-2 bg-white rounded-lg p-1 shadow">
+          {[
+            { id: 'search', label: 'Search', icon: Search },
+            { id: 'results', label: 'Results', icon: Filter },
+            { id: 'candidates', label: 'Clients', icon: Users },
+            { id: 'email', label: 'Email', icon: Mail },
+            { id: 'calendar', label: 'Follow-ups', icon: Calendar }
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors flex-1 justify-center"
+              style={activeTab === tab.id ? { background: NAVY, color: 'white' } : { color: '#4b5563' }}
+            >
+              <tab.icon size={18} />{tab.label}
+              {tab.id === 'candidates' && savedCandidates.length > 0 && (
+                <span className="text-white text-xs px-2 py-0.5 rounded-full" style={{ background: GOLD }}>{savedCandidates.length}</span>
+              )}
+              {tab.id === 'results' && searchResults.length > 0 && (
+                <span className="text-white text-xs px-2 py-0.5 rounded-full" style={{ background: GOLD }}>{searchResults.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto p-4">
+
+        {activeTab === 'search' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: NAVY }}>
+              <Search size={24} />Search Clients
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1"><MapPin size={14} className="inline mr-1" />Location</label>
+                <select value={filters.location} onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))} className={inp}>
+                  {LOCATIONS.map(loc => <option key={loc.value} value={loc.value}>{loc.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1"><Building size={14} className="inline mr-1" />Industry</label>
+                <select value={filters.industry} onChange={(e) => setFilters(prev => ({ ...prev, industry: e.target.value, keyword: '' }))} className={inp}>
+                  {INDUSTRIES.map(ind => <option key={ind.value} value={ind.value}>{ind.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1"><Tag size={14} className="inline mr-1" />Search Criteria</label>
+                <textarea
+                  value={filters.keyword}
+                  onChange={(e) => setFilters(prev => ({ ...prev, keyword: e.target.value }))}
+                  placeholder="Describe what you're looking for, e.g. 'CFO with fintech experience' or 'AI strategy background'..."
+                  className={inp + " resize-none"}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1"><Star size={14} className="inline mr-1" />Min Match Score: {filters.minMatchScore}%</label>
+                <input type="range" min="0" max="100" value={filters.minMatchScore} onChange={(e) => setFilters(prev => ({ ...prev, minMatchScore: parseInt(e.target.value) }))} className="w-full accent-amber-500" />
+              </div>
+            </div>
+
+            {(filters.location || filters.industry || filters.keyword) && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="text-sm text-gray-600">Active filters:</span>
+                {filters.location && (
+                  <span className="text-white text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ background: NAVY }}>
+                    <MapPin size={12} />{filters.location}<button onClick={() => setFilters(prev => ({ ...prev, location: '' }))}><X size={12} /></button>
+                  </span>
+                )}
+                {filters.industry && (
+                  <span className="text-white text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ background: NAVY }}>
+                    <Building size={12} />{INDUSTRIES.find(i => i.value === filters.industry)?.label}
+                    <button onClick={() => setFilters(prev => ({ ...prev, industry: '', keyword: '' }))}><X size={12} /></button>
+                  </span>
+                )}
+                {filters.keyword && (
+                  <span className="text-white text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ background: GOLD }}>
+                    <Tag size={12} />{filters.keyword.length > 20 ? filters.keyword.slice(0, 20) + '...' : filters.keyword}
+                    <button onClick={() => setFilters(prev => ({ ...prev, keyword: '' }))}><X size={12} /></button>
+                  </span>
+                )}
+                <button onClick={() => setFilters({ location: '', industry: '', keyword: '', minMatchScore: 0 })} className="text-xs text-red-600 hover:text-red-800 underline">Clear all</button>
+              </div>
+            )}
+
+            <button onClick={handleSearch} disabled={loading} className="w-full text-white py-3 rounded-lg transition-opacity flex items-center justify-center gap-2 disabled:opacity-50 font-semibold" style={{ background: GOLD }}>
+              {loading ? <><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>Searching...</> : <><Search size={20} />Search Clients</>}
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'results' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: NAVY }}><Filter size={24} />Search Results ({searchResults.length})</h2>
+            {searchResults.length === 0 ? (
+              <div className="text-center py-8 text-gray-500"><Search size={48} className="mx-auto mb-4 opacity-50" /><p>No results yet. Use the Search tab to find clients.</p></div>
+            ) : (
+              <div>{searchResults.map(c => <CandidateCard key={c.id} candidate={c} isSearchResult={true} />)}</div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'candidates' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: NAVY }}><Users size={24} />Saved Clients ({savedCandidates.length})</h2>
+            {savedCandidates.length === 0 ? (
+              <div className="text-center py-8 text-gray-500"><Users size={48} className="mx-auto mb-4 opacity-50" /><p>No saved clients yet. Search and save clients to build your pipeline.</p></div>
+            ) : (
+              <div>{savedCandidates.map(c => <CandidateCard key={c.id} candidate={c} />)}</div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'email' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: NAVY }}><Mail size={24} />Compose Email</h2>
+            <div className="space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">To</label><input type="email" value={emailDraft.to} onChange={(e) => setEmailDraft(prev => ({ ...prev, to: e.target.value }))} className={inp} placeholder="client@email.com" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Subject</label><input type="text" value={emailDraft.subject} onChange={(e) => setEmailDraft(prev => ({ ...prev, subject: e.target.value }))} className={inp} placeholder="Email subject" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Message</label><textarea value={emailDraft.body} onChange={(e) => setEmailDraft(prev => ({ ...prev, body: e.target.value }))} className={inp + " h-48"} placeholder="Write your message..." /></div>
+              <button onClick={sendEmail} disabled={loading} className="w-full text-white py-3 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 font-semibold" style={{ background: NAVY }}>
+                {loading ? <><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>Sending...</> : <><Send size={20} />Send Email</>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'calendar' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: NAVY }}><Calendar size={24} />Schedule Follow-up</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Client</label>
+                <select value={followUp.candidateId} onChange={(e) => setFollowUp(prev => ({ ...prev, candidateId: e.target.value }))} className={inp}>
+                  <option value="">Choose a client...</option>
+                  {savedCandidates.map(c => <option key={c.id} value={c.id}>{c.name} - {c.current_title} at {c.current_company}</option>)}
+                </select>
+              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Follow-up Date</label><input type="datetime-local" value={followUp.date} onChange={(e) => setFollowUp(prev => ({ ...prev, date: e.target.value }))} className={inp} /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notes</label><textarea value={followUp.notes} onChange={(e) => setFollowUp(prev => ({ ...prev, notes: e.target.value }))} className={inp + " h-24"} placeholder="Add notes for this follow-up..." /></div>
+              <button onClick={scheduleFollowUp} className="w-full text-white py-3 rounded-lg flex items-center justify-center gap-2 font-semibold" style={{ background: GOLD }}>
+                <Plus size={20} />Schedule Follow-up
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
