@@ -69,27 +69,59 @@ export default function ClientRadar() {
     } catch (err) { setError('Failed to load saved clients'); }
   };
 
-  const handleSearch = async () => {
+ const handleSearch = async () => {
   setLoading(true); setError(null);
   try {
+    // Step 1: Use AI to extract keywords if there's a description
+    let searchTerms = [];
+    if (filters.keyword) {
+      try {
+        const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 100,
+            messages: [{
+              role: "user",
+              content: `Extract 3 to 5 short job title keywords from this description. Return ONLY a JSON array of strings like ["RIA","CFP","wealth manager"]. No explanation. Description: ${filters.keyword}`
+            }]
+          })
+        });
+        const aiData = await aiResponse.json();
+        const rawText = aiData.content[0].text.trim();
+        searchTerms = JSON.parse(rawText);
+      } catch (aiErr) {
+        console.error('AI extraction failed, using first 3 words:', aiErr);
+        searchTerms = filters.keyword.trim().split(/\s+/).slice(0, 3);
+      }
+    }
+
+    // Step 2: Build Supabase query
     let query = supabase.from('candidates').select('*');
     if (filters.location) query = query.ilike('location', `%${filters.location}%`);
     if (filters.industry) query = query.eq('industry', filters.industry);
 
-    if (filters.keyword) {
-      // Use AI to extract search terms from the description
-      const aiResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 200,
-          messages: [{
-            role: "user",
-            content: `Extract the 3-5 most important job title or role keywords from this client description. Return ONLY a comma-separated list of short keywords, nothing else. Description: ${filters.keyword}`
-          }]
-        })
-      });
+    if (searchTerms.length > 0) {
+      const orConditions = searchTerms.flatMap(kw => [
+        `current_title.ilike.%${kw}%`,
+        `previous_title.ilike.%${kw}%`,
+        `current_company.ilike.%${kw}%`
+      ]).join(',');
+      query = query.or(orConditions);
+    }
+
+    if (filters.minMatchScore > 0) query = query.gte('match_score', filters.minMatchScore);
+
+    const { data, error } = await query.order('match_score', { ascending: false });
+    if (error) throw error;
+    setSearchResults(data || []);
+    setActiveTab('results');
+  } catch (err) {
+    console.error('Search error:', err);
+    setError('Search failed. Please try again.');
+  } finally { setLoading(false); }
+};
       const aiData = await aiResponse.json();
       const keywords = aiData.content[0].text.split(',').map(k => k.trim()).filter(Boolean);
       
