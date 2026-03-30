@@ -52,7 +52,7 @@ const INDUSTRIES = [
   { value: 'LEGAL', label: 'Legal' }
 ];
 
-export default function TalentRadar() {
+export default function ClientRadar() {
   const [activeTab, setActiveTab] = useState('search');
   const [candidates, setCandidates] = useState([]);
   const [savedCandidates, setSavedCandidates] = useState([]);
