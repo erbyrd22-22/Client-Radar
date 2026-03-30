@@ -364,7 +364,7 @@ export default function ClientRadar() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users size={28} />
-            TalentRadar
+            ClientRadar
           </h1>
           <p className="text-blue-100">Recruitment Pipeline Manager</p>
         </div>
