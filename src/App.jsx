@@ -148,7 +148,7 @@ export default function ClientRadar() {
         query = query.or(orConditions);
       }
       if (filters.minMatchScore > 0) query = query.gte('match_score', filters.minMatchScore);
-      const { data, error } = await query.order('match_score', { ascending: false });
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       setSearchResults(data || []);
       setActiveTab('results');
