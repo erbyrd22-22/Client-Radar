@@ -1,2 +1,2 @@
-# Talent-Radar
-Tomer Search Group AI Talent Radar
+# Client-Radar
+Leverage AI Strategies Client Radar
